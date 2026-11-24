@@ -19,8 +19,9 @@ def test_redirect_v1():
     assert r.json()["name"] == "GeoImageNet API"
 
 
-def test_changelog(client):
-    r = client.get("/changelog", allow_redirects=True)
+def test_changelog(client_application):
+    # the slash redirect carries the /api/v1 prefix, so follow it through the mounted application
+    r = client_application.get("/api/v1/changelog", allow_redirects=True)
     assert r.status_code == 200
     assert r.content.decode().startswith("Changelog")
 

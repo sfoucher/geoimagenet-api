@@ -1,16 +1,27 @@
-geoalchemy2
-alembic
-psycopg2-binary
-sqlalchemy-utils
-python-slugify
-text-unidecode
-dateparser
-sentry-sdk
-click
-loguru
-pyyaml
-https://github.com/boundlessgeo/gsconfig/archive/master.zip#egg=gsconfig
-fastapi
-requests
-uvicorn
+# Pinned in 2026 to versions released before tag 1.4.2 (July 2020).
+# Unpinned, pip now resolves FastAPI 0.103 / Pydantic 2, which this code can't run on.
+geoalchemy2==0.8.4
+alembic==1.4.2
+psycopg2-binary==2.8.5
+sqlalchemy==1.3.18
+sqlalchemy-utils==0.36.6
+python-slugify==4.0.1
+text-unidecode==1.3
+dateparser==0.7.6
+# dateparser 0.7.6 breaks with newer regex; pin its dependencies to 2020 releases
+regex==2020.7.14
+python-dateutil==2.8.1
+pytz==2020.1
+tzlocal==2.1
+sentry-sdk==0.16.1
+click==7.1.2
+loguru==0.5.1
+pyyaml==5.3.1
+# was https://github.com/boundlessgeo/gsconfig/archive/master.zip, repository deleted
+geoserver-restconfig==2.0.4.5  # GeoNode continuation of that repo (July 2020); PyPI gsconfig 1.0.10 is Python 2 only
+fastapi==0.60.1
+pydantic==1.5.1
+starlette==0.13.6
+uvicorn==0.11.5
+requests==2.24.0
 urllib3<=1.24.2

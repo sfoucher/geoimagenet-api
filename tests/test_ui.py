@@ -1,4 +1,4 @@
-def test_ensure_ui_loads(client):
+def test_ensure_ui_loads(client, client_application):
     """The ui is rendered in javascript... so the response is always 200
     even if the openapi schema is malformed
 
@@ -16,6 +16,7 @@ def test_ensure_ui_loads(client):
     assert r.status_code == 200
 
     # redirect /ui to /redoc
-    r = client.get("/ui", allow_redirects=True)
+    # redirects carry the /api/v1 prefix, so follow them through the mounted application
+    r = client_application.get("/api/v1/ui", allow_redirects=True)
     assert r.status_code == 200
     assert r.url.endswith("/redoc")
