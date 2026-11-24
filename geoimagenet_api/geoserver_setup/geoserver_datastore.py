@@ -359,16 +359,18 @@ class GeoServerDatastore:
 
     def create_contours_datastores(self, image_data: List[Union[ImageData, ImageInfo]]):
         logger.debug(f"Creating contours datastores")
+        # plain path: the body goes through json.dumps, so escaping "/" as "\/" here made
+        # GeoServer store a literal backslash path it can't open
         images_folder = self.get_config("images_folder").rstrip("/") + "/"
-        escaped_images_folder = images_folder.replace("/", r"\/")
 
         for data in image_data:
             workspace_name = f"{data.sensor_name}_CONTOURS"
             existing_stores = self.request(
                 "get", f"/workspaces/{workspace_name}/datastores"
             )
+            # GeoServer returns {"dataStores": ""} when the workspace has none
             existing_stores_names = [
-                s["name"] for s in existing_stores["dataStores"]["dataStore"]
+                s["name"] for s in (existing_stores["dataStores"] or {}).get("dataStore", [])
             ]
 
             store_name = workspace_name  # same name
@@ -389,7 +391,7 @@ class GeoServerDatastore:
                                     {"@key": "filetype", "$": "shapefile"},
                                     {
                                         "@key": "url",
-                                        "$": f"file:{escaped_images_folder}PLEIADES_CONTOURS",
+                                        "$": f"file:{images_folder}PLEIADES_CONTOURS",
                                     },
                                 ]
                             },
@@ -408,8 +410,9 @@ class GeoServerDatastore:
             existing_layers = self.request(
                 "get", f"/workspaces/{workspace_name}/layers"
             )
+            # GeoServer returns {"layers": ""} when the workspace has none
             existing_layers_names = [
-                s["name"] for s in existing_layers["layers"]["layer"]
+                s["name"] for s in (existing_layers["layers"] or {}).get("layer", [])
             ]
             for image in image_data.images_list:
                 image_trace = find_image_trace(
@@ -500,12 +503,22 @@ class GeoServerDatastore:
                     style = default_style.name
                     if data.bands == "RGBN":
                         style = workspace_name.split("_")[-1]
-                    self.create_coverage_store(path, workspace_name, style)
+                    # InputTransparentColor fails on 4-band images in GeoServer 2.15
+                    # ("BandCombine: Input matrix has wrong dimensions"); RGBN images
+                    # mark their borders with a NoData value instead.
+                    transparent_black = data.bands != "RGBN"
+                    self.create_coverage_store(
+                        path, workspace_name, style, transparent_black
+                    )
 
             self.map_threaded(_create_coverage_store, data.images_list)
 
     def create_coverage_store(
-        self, path: Path, workspace_name: str, style: str = default_style.name
+        self,
+        path: Path,
+        workspace_name: str,
+        style: str = default_style.name,
+        transparent_black: bool = True,
     ):
         image_name = path.stem
         type_ = self.extensions.get(path.suffix.lower())
@@ -553,12 +566,13 @@ class GeoServerDatastore:
                     self.request("put", url, data=data)
                     layer.default_style = self.existing_styles[style]
 
-            logger.debug(f"Setting transparency to layer: {layer_name}")
             url = f"/workspaces/{workspace_name}/coveragestores/{layer_name}/coverages/{layer_name}"
+            transparent_color = "#000000" if transparent_black else ""
+            logger.debug(f"Setting transparent color '{transparent_color}' to layer: {layer_name}")
             data = {
                 "coverage": {
                     "parameters": {
-                        "entry": [{"string": ["InputTransparentColor", "#000000"]}]
+                        "entry": [{"string": ["InputTransparentColor", transparent_color]}]
                     }
                 }
             }
