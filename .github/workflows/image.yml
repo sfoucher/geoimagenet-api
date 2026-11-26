@@ -1,0 +1,64 @@
+# Builds the image on every branch push; publishes to GHCR only for tags vX.Y.Z-gin.N
+# (fork release N of upstream X.Y.Z): v1.4.2-gin.1 -> ghcr.io/sfoucher/geoimagenet-api:1.4.2-gin.1.
+# The pushed image is exactly the one that passed the smoke test.
+# No secret other than the automatic GITHUB_TOKEN.
+name: image
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/sfoucher/geoimagenet-api
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha
+      - name: Build (local image)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test
+        run: |
+          IMG="${DOCKER_METADATA_OUTPUT_TAGS%%$'\n'*}"
+          docker run --rm --entrypoint python "$IMG" -c 'import shutil, geoimagenet_api, geoimagenet_api.database.migrations, geoimagenet_api.geoserver_setup.main, uvicorn.workers; assert shutil.which("migrate") and shutil.which("gunicorn")'
+      - name: Log in to GHCR
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push the smoke-tested image
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: docker push --all-tags "$IMAGE"
