@@ -22,6 +22,15 @@ from geoimagenet_api.geoserver_setup.utils import (
 )
 
 
+class _Catalog(Catalog):
+    """geoserver-restconfig 2.0.4 posts to ".../namespaces/"; GeoServer 3 (Spring 6) answers
+    404 to a trailing slash. Strip it from every request."""
+
+    def http_request(self, url, data=None, method="get", headers={}):
+        url = re.sub(r"/+(?=\?|$)", "", url)
+        return super().http_request(url, data=data, method=method, headers=headers)
+
+
 @dataclass
 class Style:
     name: str
@@ -86,6 +95,7 @@ class GeoServerDatastore:
         params=None,
         ignore_codes=None,
         retry=1,
+        content_type=None,
     ) -> Dict:
         if not url.startswith("/"):
             url = "/" + url
@@ -93,8 +103,8 @@ class GeoServerDatastore:
             url = self.gwc_url + url
         else:
             url = self.geoserver_url + url
-        content_type = "application/json" if json_ else "application/xml"
-        headers = {"Accept": content_type, "Content-type": content_type}
+        accept = "application/json" if json_ else "application/xml"
+        headers = {"Accept": accept, "Content-type": content_type or accept}
         if json_:
             data = json.dumps(data)
 
@@ -250,7 +260,7 @@ class GeoServerDatastore:
     def catalog(self):
         if self._catalog is None:
             logger.debug(f"Getting catalog from {self.geoserver_url}")
-            self._catalog = Catalog(
+            self._catalog = _Catalog(
                 self.geoserver_url,
                 username=self.user,
                 password=self.password,

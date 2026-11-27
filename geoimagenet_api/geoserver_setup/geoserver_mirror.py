@@ -69,6 +69,7 @@ class GeoServerMirror(GeoServerDatastore):
         self.delete_cached_layers(images_info)
 
         self.create_annotation_workspace()
+        self.create_annotations_style()
         self.create_annotation_store()
         self.create_annotation_layer(self.annotation_table)
         self.create_annotation_layer(self.image_trace_table)
@@ -222,6 +223,24 @@ class GeoServerMirror(GeoServerDatastore):
                 "post",
                 f"/workspaces/{self.annotation_workspace}/datastores.json",
                 data=data,
+            )
+
+    def create_annotations_style(self):
+        """The `annotations` style (colored outlines by status), used by the thumbnails."""
+        styles = self.request("get", "/styles.json")["styles"]
+        if styles and any(s["name"] == "annotations" for s in styles["style"]):
+            logger.info("Style annotations already exists")
+            return
+        logger.info("CREATE style: annotations")
+        if not self.dry_run:
+            sld = (self._get_data_file("../styles/annotations.sld")).read_text()
+            self.request(
+                "post",
+                "/styles",
+                data=sld.encode("utf-8"),
+                json_=False,
+                params={"name": "annotations"},
+                content_type="application/vnd.ogc.sld+xml",
             )
 
     def create_annotation_layer(self, table_name):
