@@ -194,3 +194,15 @@ def test_multipolygon_wkt():
 
     polygon = wkt_multipolygon_to_polygon(multipolygon)
     assert polygon == "SRID=3857;POLYGON ((20 35, 10 30, 10 10, 30 5, 45 20, 20 35))"
+
+
+def test_catalog_strips_trailing_slash(monkeypatch):
+    # GeoServer 3 answers 404 to ".../namespaces/", which geoserver-restconfig posts to
+    from geoserver.catalog import Catalog
+    from geoimagenet_api.geoserver_setup.geoserver_datastore import _Catalog
+
+    monkeypatch.setattr(Catalog, "http_request", lambda self, url, **kw: url)
+    c = _Catalog.__new__(_Catalog)
+    assert c.http_request("http://h/rest/namespaces/?a=1") == "http://h/rest/namespaces?a=1"
+    assert c.http_request("http://h/rest/namespaces/") == "http://h/rest/namespaces"
+    assert c.http_request("http://h/rest/namespaces") == "http://h/rest/namespaces"
